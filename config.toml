@@ -164,7 +164,7 @@ enableGitInfo = false # original is false
     "r", "Markdown", "tex", "mathematica", "matlab", "java", "bash", "c++",
     "c#", "javascript", "python", "sql", "xml"
   ]
-  # highlight_style = "github"
+  highlight_style = "github"
 
   # Enable native social sharing buttons?
   sharing = true
@@ -253,6 +253,16 @@ enableGitInfo = false # original is false
     link = "https://scholar.google.it/citations?user=Liqmyc4AAAAJ&hl=it"
 
   [[params.social]]
+    icon = "researchgate"
+    icon_pack = "ai"
+    link = "https://www.researchgate.net/profile/Corrado_Lanera"
+
+  [[params.social]]
+    icon = "orcid"
+    icon_pack = "ai"
+    link = " https://orcid.org/0000-0002-0520-7428"
+
+  [[params.social]]
     icon = "github"
     icon_pack = "fa"
     link = "//github.com/CorradoLanera"
@@ -283,24 +293,29 @@ enableGitInfo = false # original is false
   weight = 2
 
 [[menu.main]]
+  name = "Talks"
+  url = "#talks"
+  weight = 3
+
+[[menu.main]]
   name = "Posts"
   url = "#posts"
-  weight = 3
+  weight = 4
 
 [[menu.main]]
   name = "Projects"
   url = "#projects"
-  weight = 4
+  weight = 5
 
 [[menu.main]]
   name = "Teaching"
   url = "#teaching"
-  weight = 5
+  weight = 6
 
 [[menu.main]]
   name = "Contact"
   url = "#contact"
-  weight = 6
+  weight = 7
 
 # Link to a PDF of your resume/CV from the menu.
 # To enable, copy your resume/CV to `static/files/cv.pdf` and uncomment the lines below.

@@ -1,26 +1,26 @@
 +++
-title = "Example Talk"
-date = 2017-01-01T00:00:00  # Schedule page publish date.
+title = "{{ replace .TranslationBaseName "-" " " | title }}"
+date = {{ .Date }}  # Schedule page publish date.
 draft = false
 
 # Talk start and end times.
 #   End time can optionally be hidden by prefixing the line with `#`.
-time_start = 2030-06-01T13:00:00
-time_end = 2030-06-01T15:00:00
+time_start = {{ .Date }}
+time_end = {{ .Date }}
 
 # Abstract and optional shortened version.
-abstract = "My very abstract"
+abstract = ""
 abstract_short = ""
 
 # Name of event and optional event URL.
-event = "Super Cool Conference"
-event_url = "https://example.org"
+event = ""
+event_url = ""
 
 # Location of event.
-location = "London, United Kingdom"
+location = ""
 
 # Is this a selected talk? (true/false)
-selected = true
+selected = false
 
 # Projects (optional).
 #   Associate this talk with one or more of your projects.
@@ -40,7 +40,7 @@ url_video = ""
 url_code = ""
 
 # Does the content use math formatting?
-math = true
+math = false
 
 # Does the content use source code highlighting?
 highlight = true
@@ -48,9 +48,7 @@ highlight = true
 # Featured image
 # Place your image in the `static/img/` folder and reference its filename below, e.g. `image = "example.jpg"`.
 [header]
-image = "headers/bubbles-wide.jpg"
-caption = "My caption :smile:"
+image = ""
+caption = ""
 
 +++
-
-Embed your slides or video here using [shortcodes](https://sourcethemes.com/academic/post/writing-markdown-latex/). Further details can easily be added using *Markdown* and $\rm \LaTeX$ math code.

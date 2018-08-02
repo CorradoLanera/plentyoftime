@@ -2,7 +2,7 @@
 # About/Biography widget.
 widget = "about"
 active = true
-date = 2018-07-02T00:00:00
+date = 2018-07-03T00:00:00
 
 # Order that this section will appear in.
 weight = 5
@@ -17,7 +17,7 @@ weight = 5
 
 # List your qualifications (such as academic degrees).
 [[education.courses]]
-  course = "II year Ph.D. in Biostatistics, \"Study and Application of Machine Learning, and Phenomapping Techniques Applied to Clinical Sciences\""
+  course = "III year Ph.D. in Biostatistics, \"Study and Application of Machine Learning, and Phenomapping Techniques Applied to Clinical Sciences\""
   institution = "University of Padova"
   year = 2019
 
