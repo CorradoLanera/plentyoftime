@@ -23,12 +23,13 @@ of what is `POSIX` and what is `ct`, `lt`, `t`, ... Cool!!! I can do it!
 
 Immediatly I tought it could be a great opportunity to learn something new and
 possibly be usefull. I quickly read some of the source code of the corresponding
-function such as `as.Date`, `as.POSIXct`...^[I searched the source code on my
-phone, and it was quite difficult to me to find R source code without R, any
-suggestion?!]. There I have found a line of code which could possibly solve the
-problem. I search for a __datacamp__-like WEBpage to run the code, and as soon
-as a call to something like `identical(f(x), y)` returned me `TRUE` I posted my
-solution:
+function such as `as.Date`, `as.POSIXct`... I searched the source code on my
+phone, and it was quite difficult to me to find R source code without R, but
+I finally find it [here](https://github.com/SurajGupta/r-source/blob/master/src/library/base/R/datetime.R). At the line `147` into the definition of `as.POSIXct.default()` for 
+character vectors I supposed to have found a solution which possibly solve the 
+problem. I searched for a WEB page to run the code, and I found it [here](rexter.com/l/r_online_compiler). As soon as I checked that the call to
+something like `identical(f(x), y)` returned me `TRUE`, I was ready to post my
+proposal solution:
 
 
 ```{r echo=FALSE}
