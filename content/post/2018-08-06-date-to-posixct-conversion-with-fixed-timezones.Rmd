@@ -1,0 +1,463 @@
+---
+title: as.Date to as.POSIXct conversion with fixed timezones
+author: Corrado Lanera
+date: '2018-08-06'
+slug: date-to-posixct-conversion-with-fixed-timezones
+categories: [R]
+tags: [R, datetime, POSIX, live R understanding]
+draft: no
+header:
+  caption: ''
+  image: ''
+---
+
+
+Two days ago Hadley Wickham posted the following tweet:
+
+```{r echo=FALSE}
+blogdown::shortcode("tweet", "1025390442387398657")
+```
+
+I do not have any idea about a possible answer!! I do not ever have any idea
+of what is `POSIX` and what is `ct`, `lt`, `t`, ... Cool!!! I can do it!
+
+Immediatly I tought it could be a great opportunity to learn something new and
+possibly be usefull. I quickly read some of the source code of the corresponding
+function such as `as.Date`, `as.POSIXct`...^[I searched the source code on my
+phone, and it was quite difficult to me to find R source code without R, any
+suggestion?!]. There I have found a line of code which could possibly solve the
+problem. I search for a __datacamp__-like WEBpage to run the code, and as soon
+as a call to something like `identical(f(x), y)` returned me `TRUE` I posted my
+solution:
+
+
+```{r echo=FALSE}
+blogdown::shortcode("tweet", "1025410733440491521")
+```
+
+Which was, obviously, not optimal due to the hurry I have to post it...
+Hence, I post another tweet ... which have the effect of made me super honoured 
+to recieve a direct, concise and wonderful Hadley response!
+
+```{r echo=FALSE}
+blogdown::shortcode("tweet", "1025417474613735424")
+```
+
+
+But any good tails cannot have an happy end at the beginning, and some minutes
+later... this happen.
+
+```{r echo=FALSE}
+blogdown::shortcode("tweet", "1025443746194890752")
+```
+
+
+I tried to understand the problem, asking to
+[\@echasnovsky](https://twitter.com/echasnovski) some more details about the
+output, the system information, ... but it seams the solution does not work for
+him. Which finaly means that it doesn't work. 
+
+It seams that there is some hard work to do. So, let's start play!
+
+```{r setup}
+the_date <- "2018-10-01"
+
+x <- as.Date(the_date)
+y <- as.POSIXct(the_date, tz = "Pacific/Auckland")
+```
+
+First of all we have to understand the two object we want to trasform from and
+to.
+
+
+## Setup
+```{r}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+
+library(magrittr)                                       # activate pipe operator
+```
+
+
+## as.Date(the_date)
+
+```{r}
+typeof(x)
+class(x)
+str(x)
+attributes(x)
+unclass(x)
+```
+
+So, basically `x` is a *double* with absolutely no information about timezones
+or other time specification. It has only an S3 class *Date*. Hence we have to
+understand how R computed this number and how we can convert it to the correct
+*POSIXct* object we want.
+
+To create `x`, R has to call `as.Date.character()` under the hood. which is
+
+```{r}
+as.Date.character
+```
+
+
+So, because we have `missing(format)` which avaluates to
+`TRUE`, `tryFormats = c("%Y-%m-%d", "%Y/%m/%d")` that matches the first option, 
+and `optional = FALSE` which remains with the default value (i.e., `FALSE`),
+then the call to `as.Date.character()` is reduced to the call to
+`charToDate(x)`, defined inside `as.Date.character()`.
+
+Moreover, consider all the option and value just stated, this call will be
+a call to `as.Date(strptime(x, f))` where `x` is the main character
+string (`the_date` for us) passed to `as.Date()`, and `f` (which, for us,
+evaluate to `"%Y-%m-%d"`) is the format in which the time is written in the
+string.
+
+> Note that the call to `strptime()` has no timezone defined and there is
+nothing we can do about it! So, every attempt to change the timezone is uselss.
+
+
+```{r}
+identical(
+  as.Date("2018-10-01"),
+  as.Date("2018-10-01", tz = "Europe/Berlin")
+)
+identical(
+  as.Date("2018-10-01"),
+  as.Date("2018-10-01", tz = "Pacific/Auckland")
+)
+identical(
+  as.Date("2018-10-01"),
+  as.Date("2018-10-01", tz = "GMT")
+)
+```
+
+Now, `strptime` is
+
+```{r}
+strptime
+```
+
+So, R is forced to call it using `tz = ""` which meas the `Sys.timezone()` time
+zone, as we can read in the *tz* argument of `?timezone` (e.g., for me is
+`r Sys.timezone()`). In particular (as we can also read in `?strptime` at the
+*format* argument explanation`: __The default for the format methods is
+"%Y-%m-%d %H:%M:%S" if any element has a time component which is not midnight,
+and "%Y-%m-%d" otherwis__), it is parse to the midnight.
+
+So, we have understood that `strptime(x, f)` is a representation of the midnight
+of the day passed as input, in "our" timezone. It has the class(es)
+
+```{r}
+strptime(the_date, "%Y-%m-%d") %>%
+  class()
+```
+
+and so, the output of `as.Date(strptime(x, f))` is finally the results of
+`as.Date.POSIXlt()` called on the *POSIXlt* object just created and forced to be
+in the OS timezone:
+
+```{r}
+as.Date.POSIXlt
+```
+
+This calls another internal function we can consider "unknown". Anyway, looking
+at the call, there is no input there we can pass to force the timezone. Hence we
+will finally have an object which report the midnight in a class `Date`,
+registered as "the number of days from "1970-01-01".
+
+The last assertion is not explicitely stated in the help page `?as.Date` for 
+character input, but we can easily verifiying it (considering that this is
+independent from any timezone declaration as we already proved):
+
+```{r}
+as.Date("1970-01-01") %>%
+  unclass
+```
+
+The problem is the timezone: as we can see the first call (in which we cannot
+pass a time zone) produce a `Sys.timezone()` timezone datetime, while the last
+call to `as.Date.POSIXlt()` produced a *UTC* timezone datetime (correctly interpreted).
+
+For me (CEST), time is GMT+2 hence the first part of the call
+(i.e., `strptime()`) produce a CEST date-time
+```{r}
+strptime(the_date, "%Y-%m-%d")
+```
+ but at the end of `as.Date(the_date)`, R produced a *UTC* datetime because
+ `as.Date.POSIXlt()` (empirically proved :-)) use *UTC* time
+ 
+```{r}
+as.Date(the_date)
+as.Date.POSIXlt(strptime(the_date, "%Y-%m-%d"))
+```
+ 
+ So the final "value" of `x` is the number of day form the reference computed as
+ follow:
+ 
+ 1. bring the number of seconds from the reference in your current timezone:
+    practically, this means that R stores it as the number of seconds
+    from the reference in the *UTC* time zone, and on the side it stores the
+    quantity of seconds you have to add to reach your timezone.
+ 2. transform it in a number of day in *UTC*
+ 
+Hence, if we convert ithe first part in seconds, and we add, in our example,
+$7200$, and next we divide for the number of seconds in a day ($86400$) we reach
+the same (numerical) result. As the basic operation (clearly in both the versions chained or with a single call).
+
+```{r}
+
+basic_time <- strptime(the_date, "%Y-%m-%d") %>%
+      as.POSIXct() %>%
+      unclass()
+(basic_time + 7200) / (60 * 60 * 24)
+
+strptime(the_date, "%Y-%m-%d") %>%
+  as.Date.POSIXlt() %>%
+  unclass()
+
+as.Date(the_date) %>%
+  unclass()
+```
+
+
+
+## as.POSIXct(the_date, tz = "Pacific/Auckland")
+
+Now, let's start to inspect the target object.
+
+```{r}
+typeof(y)
+class(y)
+str(y)
+attributes(y)
+unclass(y)
+```
+
+This is also a double but with a differend (main) class, i.e. *POSIXct*. It has
+also a timezone attributes *tzone*, and as we can read in the documentation
+`?as.POSIXct` it represent the number of seconds passed from "the origin of time
+[...] ‘1970-01-01 00:00.00 UTC’".^[This also confirms our empirical congecture
+about the R beginning of time made for `as.Date()`]
+
+Trying to see what the call is for a character input, we descover that there is 
+no method for a character input.
+
+```{r}
+methods("as.POSIXct")
+```
+
+This means that R will call `as.POSIXct.default()` on `the_date`.
+
+```{r}
+as.POSIXct.default
+```
+
+
+The call (as we can also read in the documentation `?as.POSIXct`) pass through
+the call to `as.POSIXlt()`, and in particular, R calls
+`as.POSIXct(as.POSIXlt(x, tz, ...), tz, ...)` on our character input `x`
+(`the_date` for us).
+
+```{r}
+as.POSIXlt.character
+```
+
+For us, `tz` is `"Pacific/Auckland"`, `missing(format)` evaluates to `TRUE`, `tryFormats` matchs
+"%Y-%m-%d", `optional` remain the default `FALSE`. Moreover, because
+`the_date` has a basic class *character* its `unclass()` doesn't change it
+
+
+```{r}
+identical(
+  the_date,
+  unclass(the_date)
+)
+```
+
+and `nzchar(tz)` is `TRUE` because we passed an explicit timezone.
+
+Hence, our actual call is `res <- strptime(x, f, tz = tz)` with a further
+attribute definition as `attr(res, "tzone") <- tz` (and a obvius final
+`return(res)`).
+
+So, as before, we finish to call `strptime()` on a character vector, but this
+time we pass the timezone into the call and so the date is parsed as the
+midnight in __that__ timezone. After that, R remove any additional timezones
+attached as an attributes bringing only the (first) one passed explicitely.
+
+```{r}
+res <- strptime(the_date, "%Y-%m-%d", tz = "Pacific/Auckland")
+unclass(res)
+
+attr(res, "tzone") <- "Pacific/Auckland"
+unclass(res)
+```
+
+
+Now is the turn to call `as.POSIXct.POSIXlt()` to this object
+
+```{r}
+as.POSIXct.POSIXlt
+```
+
+for which `tz` is (`!missing(tz)` and) set by us as `"Pacific/Auckland"`.
+Moreover, it is equal to `tzone` (for which `!is.null(tzone)`).
+
+So, the input is first passed to `.Internal(as.POSIXct(x, tz))` (which we don't
+know what it does but we know it considers the timezone).^[Next it also change
+the `names` of the created object. Note that both in our specific case and also
+in every case it is called after a `as.POSIXlt()` call, it will be set to
+`NULL`.]
+
+```{r}
+names(res$year)
+```
+
+Finally, the result is passed to `.POSIXct(y, tz)`, end returned.
+
+```{r}
+.POSIXct
+```
+
+This simply set the class, it set (again) the `tzone` attribute (for us, in this
+automatic chain of call, in the same exact way as before), and return the
+results.
+
+To do a last useful observation, we can see that the timezone influenced not
+only the `tzone` attributes of the final object but also it "real" value, in 
+the measure provided in the `gmtoff`. Moreover, note that the `isdst` has no
+influence on the value but ony on the representation of the object
+
+
+```{r}
+y_gmt <- as.POSIXct(the_date, tz = "GMT")
+unclass(y_gmt)
+as.POSIXlt(y_gmt) %>% unclass
+
+
+y_local <- as.POSIXct(the_date)
+unclass(y_local)
+as.POSIXlt(y_local) %>% unclass
+
+unclass(y)
+as.POSIXlt(y) %>% unclass
+
+```
+
+Clearly if we make the addition manualy, we obtain results which differ in the
+timezones but the number underline the representation is the same (despite 
+what was `isdst`)
+
+```{r}
+unclass(y_gmt)
+unclass(y_local) + as.POSIXlt(y_local)$gmtoff
+unclass(y) + as.POSIXlt(y)$gmtoff
+```
+
+
+
+## From `as.Date()` to `as.POSIXct(tz = <defined>)` (without passing back from character representation)
+
+First of all take a look to what would happen for a (correct but unwanted) 
+conversion with `as.POSIXct()`
+
+```{r}
+as.POSIXct.Date
+```
+
+it will simply take the value (in days), multiplies it by the number of seconds
+in a day (which are $60 * 60 * 24 = $ `r 60 * 60 * 24`) and recreate the 
+*POSIXct* object by `.POSIXct()` (without any timezone declaration!). Hence,
+what we will obtain is the datetime representation in seconds, in our `Sys.timezone()`, correctly converted to the "same original time" which was the
+midnight at *GMT*
+
+```{r}
+as.POSIXct(x)
+```
+
+
+Hence, we cannot use this function. We could use directly the `.POSIXct()` but
+we first have to adjust the number of the day in the correct timezone (which can
+be triky) and explicitelly pass to it the timezone we want (which is simple).
+
+
+To consider another strategy we can think to pass through `as.POSIXlt()`
+
+```{r}
+as.POSIXlt.Date
+```
+
+but it doesn't have a timezone definition. We know that our *Date* object has been always reported in the *UTC* timezone reference (after a step in which it
+was computed in our timezone). Anyway, we don't know which timezone is used
+by `as.POSIXlt.Date()`
+
+```{r}
+x 
+```
+
+```{r}
+as.POSIXlt.Date(x)
+as.POSIXlt.Date(x) %>% unclass
+```
+
+It seams it correctly uses the *UTC* timezone. Hence we have a *POSIXlt*
+representation of the midnight of our original date with respect to the *UTC*
+reference.
+
+Now, we want a *POSIXct* representation of it __in__ the preferred timezone 
+(hence, we don;t want a conversion because we want __the midnight__ of that
+timezone for `the_date`).
+
+```{r}
+as.POSIXct.POSIXlt
+```
+
+As we can already seen the only dark step is what happen inside 
+`.Internal(as.POSIXct(x, tz))` which uses (we don't know how) the information
+about the stored timezone. So, we can try to apply this function a see what
+happen
+
+
+```{r}
+as.POSIXct(as.POSIXlt(x), tz = "Pacific/Auckland")
+y
+
+identical(
+  as.POSIXct(as.POSIXlt(x), tz = "Pacific/Auckland"),
+  y
+)
+```
+
+As we know it seams it works, but not for
+[\@echasnovsky](https://twitter.com/echasnovski)...
+
+
+The only place in which the proces can have problem seams to be into 
+`.Internal(as.POSIXct(x, tz))`, which uses the timezone and hence it can 
+interact between *UTC* and a conversion to the local timezone, before to store
+as attribute the target timezone. Hence, try to force a change in it!
+
+```{r}
+identical(
+  as.POSIXlt(x) %>% 
+    `attr<-`("tzone", "Pacific/Auckland") %>% 
+    as.POSIXct(tz = "Pacific/Auckland"),
+  y
+)
+```
+
+Wow. It seams to work too, and it could probably be a safer (even if longer)
+solution. Let's ask for a test to
+[\@echasnovsky](https://twitter.com/echasnovski)
+
+```{r echo=FALSE}
+blogdown::shortcode("tweet", "1026798082783100933")
+```
+
+
+## Conclusion
+
+We are waiting...

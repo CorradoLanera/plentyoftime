@@ -1,0 +1,686 @@
+---
+title: as.Date to as.POSIXct conversion with fixed timezones
+author: Corrado Lanera
+date: '2018-08-06'
+slug: date-to-posixct-conversion-with-fixed-timezones
+categories: [R]
+tags: [R, datetime, POSIX, live R understanding]
+draft: no
+header:
+  caption: ''
+  image: ''
+---
+
+
+
+<p>Two days ago Hadley Wickham posted the following tweet:</p>
+{{% tweet "1025390442387398657" %}}
+<p>I do not have any idea about a possible answer!! I do not ever have any idea
+of what is <code>POSIX</code> and what is <code>ct</code>, <code>lt</code>, <code>t</code>, … Cool!!! I can do it!</p>
+<p>Immediatly I tought it could be a great opportunity to learn something new and
+possibly be usefull. I quickly read some of the source code of the corresponding
+function such as <code>as.Date</code>, <code>as.POSIXct</code>…<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>. There I have found a line of code which could possibly solve the
+problem. I search for a <strong>datacamp</strong>-like WEBpage to run the code, and as soon
+as a call to something like <code>identical(f(x), y)</code> returned me <code>TRUE</code> I posted my
+solution:</p>
+{{% tweet "1025410733440491521" %}}
+<p>Which was, obviously, not optimal due to the hurry I have to post it…
+Hence, I post another tweet … which have the effect of made me super honoured
+to recieve a direct, concise and wonderful Hadley response!</p>
+{{% tweet "1025417474613735424" %}}
+<p>But any good tails cannot have an happy end at the beginning, and some minutes
+later… this happen.</p>
+{{% tweet "1025443746194890752" %}}
+<p>I tried to understand the problem, asking to
+<a href="https://twitter.com/echasnovski">@echasnovsky</a> some more details about the
+output, the system information, … but it seams the solution does not work for
+him. Which finaly means that it doesn’t work.</p>
+<p>It seams that there is some hard work to do. So, let’s start play!</p>
+<pre class="r"><code>the_date &lt;- &quot;2018-10-01&quot;
+
+x &lt;- as.Date(the_date)
+y &lt;- as.POSIXct(the_date, tz = &quot;Pacific/Auckland&quot;)</code></pre>
+<p>First of all we have to understand the two object we want to trasform from and
+to.</p>
+<div id="setup" class="section level2">
+<h2>Setup</h2>
+<pre class="r"><code>knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = &quot;#&gt;&quot;
+)
+
+library(magrittr)                                       # activate pipe operator</code></pre>
+</div>
+<div id="as.datethe_date" class="section level2">
+<h2>as.Date(the_date)</h2>
+<pre class="r"><code>typeof(x)
+#&gt; [1] &quot;double&quot;
+class(x)
+#&gt; [1] &quot;Date&quot;
+str(x)
+#&gt;  Date[1:1], format: &quot;2018-10-01&quot;
+attributes(x)
+#&gt; $class
+#&gt; [1] &quot;Date&quot;
+unclass(x)
+#&gt; [1] 17805</code></pre>
+<p>So, basically <code>x</code> is a <em>double</em> with absolutely no information about timezones
+or other time specification. It has only an S3 class <em>Date</em>. Hence we have to
+understand how R computed this number and how we can convert it to the correct
+<em>POSIXct</em> object we want.</p>
+<p>To create <code>x</code>, R has to call <code>as.Date.character()</code> under the hood. which is</p>
+<pre class="r"><code>as.Date.character
+#&gt; function (x, format, tryFormats = c(&quot;%Y-%m-%d&quot;, &quot;%Y/%m/%d&quot;), 
+#&gt;     optional = FALSE, ...) 
+#&gt; {
+#&gt;     charToDate &lt;- function(x) {
+#&gt;         xx &lt;- x[1L]
+#&gt;         if (is.na(xx)) {
+#&gt;             j &lt;- 1L
+#&gt;             while (is.na(xx) &amp;&amp; (j &lt;- j + 1L) &lt;= length(x)) xx &lt;- x[j]
+#&gt;             if (is.na(xx)) 
+#&gt;                 f &lt;- &quot;%Y-%m-%d&quot;
+#&gt;         }
+#&gt;         if (is.na(xx)) 
+#&gt;             strptime(x, f)
+#&gt;         else {
+#&gt;             for (ff in tryFormats) if (!is.na(strptime(xx, ff, 
+#&gt;                 tz = &quot;GMT&quot;))) 
+#&gt;                 return(strptime(x, ff))
+#&gt;             if (optional) 
+#&gt;                 as.Date.character(rep.int(NA_character_, length(x)), 
+#&gt;                   &quot;%Y-%m-%d&quot;)
+#&gt;             else stop(&quot;character string is not in a standard unambiguous format&quot;)
+#&gt;         }
+#&gt;     }
+#&gt;     res &lt;- if (missing(format)) 
+#&gt;         charToDate(x)
+#&gt;     else strptime(x, format, tz = &quot;GMT&quot;)
+#&gt;     as.Date(res)
+#&gt; }
+#&gt; &lt;bytecode: 0x000000001d037820&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>So, because we have <code>missing(format)</code> which avaluates to
+<code>TRUE</code>, <code>tryFormats = c(&quot;%Y-%m-%d&quot;, &quot;%Y/%m/%d&quot;)</code> that matches the first option,
+and <code>optional = FALSE</code> which remains with the default value (i.e., <code>FALSE</code>),
+then the call to <code>as.Date.character()</code> is reduced to the call to
+<code>charToDate(x)</code>, defined inside <code>as.Date.character()</code>.</p>
+<p>Moreover, consider all the option and value just stated, this call will be
+a call to <code>as.Date(strptime(x, f))</code> where <code>x</code> is the main character
+string (<code>the_date</code> for us) passed to <code>as.Date()</code>, and <code>f</code> (which, for us,
+evaluate to <code>&quot;%Y-%m-%d&quot;</code>) is the format in which the time is written in the
+string.</p>
+<blockquote>
+<p>Note that the call to <code>strptime()</code> has no timezone defined and there is
+nothing we can do about it! So, every attempt to change the timezone is uselss.</p>
+</blockquote>
+<pre class="r"><code>identical(
+  as.Date(&quot;2018-10-01&quot;),
+  as.Date(&quot;2018-10-01&quot;, tz = &quot;Europe/Berlin&quot;)
+)
+#&gt; [1] TRUE
+identical(
+  as.Date(&quot;2018-10-01&quot;),
+  as.Date(&quot;2018-10-01&quot;, tz = &quot;Pacific/Auckland&quot;)
+)
+#&gt; [1] TRUE
+identical(
+  as.Date(&quot;2018-10-01&quot;),
+  as.Date(&quot;2018-10-01&quot;, tz = &quot;GMT&quot;)
+)
+#&gt; [1] TRUE</code></pre>
+<p>Now, <code>strptime</code> is</p>
+<pre class="r"><code>strptime
+#&gt; function (x, format, tz = &quot;&quot;) 
+#&gt; {
+#&gt;     y &lt;- .Internal(strptime(as.character(x), format, tz))
+#&gt;     names(y$year) &lt;- names(x)
+#&gt;     y
+#&gt; }
+#&gt; &lt;bytecode: 0x000000001d02eb90&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>So, R is forced to call it using <code>tz = &quot;&quot;</code> which meas the <code>Sys.timezone()</code> time
+zone, as we can read in the <em>tz</em> argument of <code>?timezone</code> (e.g., for me is
+Europe/Berlin). In particular (as we can also read in <code>?strptime</code> at the
+<em>format</em> argument explanation`: <strong>The default for the format methods is
+“%Y-%m-%d %H:%M:%S” if any element has a time component which is not midnight,
+and “%Y-%m-%d” otherwis</strong>), it is parse to the midnight.</p>
+<p>So, we have understood that <code>strptime(x, f)</code> is a representation of the midnight
+of the day passed as input, in “our” timezone. It has the class(es)</p>
+<pre class="r"><code>strptime(the_date, &quot;%Y-%m-%d&quot;) %&gt;%
+  class()
+#&gt; [1] &quot;POSIXlt&quot; &quot;POSIXt&quot;</code></pre>
+<p>and so, the output of <code>as.Date(strptime(x, f))</code> is finally the results of
+<code>as.Date.POSIXlt()</code> called on the <em>POSIXlt</em> object just created and forced to be
+in the OS timezone:</p>
+<pre class="r"><code>as.Date.POSIXlt
+#&gt; function (x, ...) 
+#&gt; .Internal(POSIXlt2Date(x))
+#&gt; &lt;bytecode: 0x000000001d0058a0&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>This calls another internal function we can consider “unknown”. Anyway, looking
+at the call, there is no input there we can pass to force the timezone. Hence we
+will finally have an object which report the midnight in a class <code>Date</code>,
+registered as “the number of days from”1970-01-01“.</p>
+<p>The last assertion is not explicitely stated in the help page <code>?as.Date</code> for
+character input, but we can easily verifiying it (considering that this is
+independent from any timezone declaration as we already proved):</p>
+<pre class="r"><code>as.Date(&quot;1970-01-01&quot;) %&gt;%
+  unclass
+#&gt; [1] 0</code></pre>
+<p>The problem is the timezone: as we can see the first call (in which we cannot
+pass a time zone) produce a <code>Sys.timezone()</code> timezone datetime, while the last
+call to <code>as.Date.POSIXlt()</code> produced a <em>UTC</em> timezone datetime (correctly interpreted).</p>
+<p>For me (CEST), time is GMT+2 hence the first part of the call
+(i.e., <code>strptime()</code>) produce a CEST date-time</p>
+<pre class="r"><code>strptime(the_date, &quot;%Y-%m-%d&quot;)
+#&gt; [1] &quot;2018-10-01 CEST&quot;</code></pre>
+<p>but at the end of <code>as.Date(the_date)</code>, R produced a <em>UTC</em> datetime because
+<code>as.Date.POSIXlt()</code> (empirically proved :-)) use <em>UTC</em> time</p>
+<pre class="r"><code>as.Date(the_date)
+#&gt; [1] &quot;2018-10-01&quot;
+as.Date.POSIXlt(strptime(the_date, &quot;%Y-%m-%d&quot;))
+#&gt; [1] &quot;2018-10-01&quot;</code></pre>
+<p>So the final “value” of <code>x</code> is the number of day form the reference computed as
+follow:</p>
+<ol style="list-style-type: decimal">
+<li>bring the number of seconds from the reference in your current timezone:
+practically, this means that R stores it as the number of seconds
+from the reference in the <em>UTC</em> time zone, and on the side it stores the
+quantity of seconds you have to add to reach your timezone.</li>
+<li>transform it in a number of day in <em>UTC</em></li>
+</ol>
+<p>Hence, if we convert ithe first part in seconds, and we add, in our example,
+<span class="math inline">\(7200\)</span>, and next we divide for the number of seconds in a day (<span class="math inline">\(86400\)</span>) we reach
+the same (numerical) result. As the basic operation (clearly in both the versions chained or with a single call).</p>
+<pre class="r"><code>
+basic_time &lt;- strptime(the_date, &quot;%Y-%m-%d&quot;) %&gt;%
+      as.POSIXct() %&gt;%
+      unclass()
+(basic_time + 7200) / (60 * 60 * 24)
+#&gt; [1] 17805
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;&quot;
+
+strptime(the_date, &quot;%Y-%m-%d&quot;) %&gt;%
+  as.Date.POSIXlt() %&gt;%
+  unclass()
+#&gt; [1] 17805
+
+as.Date(the_date) %&gt;%
+  unclass()
+#&gt; [1] 17805</code></pre>
+</div>
+<div id="as.posixctthe_date-tz-pacificauckland" class="section level2">
+<h2>as.POSIXct(the_date, tz = “Pacific/Auckland”)</h2>
+<p>Now, let’s start to inspect the target object.</p>
+<pre class="r"><code>typeof(y)
+#&gt; [1] &quot;double&quot;
+class(y)
+#&gt; [1] &quot;POSIXct&quot; &quot;POSIXt&quot;
+str(y)
+#&gt;  POSIXct[1:1], format: &quot;2018-10-01&quot;
+attributes(y)
+#&gt; $class
+#&gt; [1] &quot;POSIXct&quot; &quot;POSIXt&quot; 
+#&gt; 
+#&gt; $tzone
+#&gt; [1] &quot;Pacific/Auckland&quot;
+unclass(y)
+#&gt; [1] 1538305200
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;Pacific/Auckland&quot;</code></pre>
+<p>This is also a double but with a differend (main) class, i.e. <em>POSIXct</em>. It has
+also a timezone attributes <em>tzone</em>, and as we can read in the documentation
+<code>?as.POSIXct</code> it represent the number of seconds passed from “the origin of time
+[…] ‘1970-01-01 00:00.00 UTC’”.<a href="#fn2" class="footnote-ref" id="fnref2"><sup>2</sup></a></p>
+<p>Trying to see what the call is for a character input, we descover that there is
+no method for a character input.</p>
+<pre class="r"><code>methods(&quot;as.POSIXct&quot;)
+#&gt; [1] as.POSIXct.Date    as.POSIXct.default as.POSIXct.numeric
+#&gt; [4] as.POSIXct.POSIXlt
+#&gt; see &#39;?methods&#39; for accessing help and source code</code></pre>
+<p>This means that R will call <code>as.POSIXct.default()</code> on <code>the_date</code>.</p>
+<pre class="r"><code>as.POSIXct.default
+#&gt; function (x, tz = &quot;&quot;, ...) 
+#&gt; {
+#&gt;     if (inherits(x, &quot;POSIXct&quot;)) 
+#&gt;         return(x)
+#&gt;     if (is.character(x) || is.factor(x)) 
+#&gt;         return(as.POSIXct(as.POSIXlt(x, tz, ...), tz, ...))
+#&gt;     if (is.logical(x) &amp;&amp; all(is.na(x))) 
+#&gt;         return(.POSIXct(as.numeric(x)))
+#&gt;     stop(gettextf(&quot;do not know how to convert &#39;%s&#39; to class %s&quot;, 
+#&gt;         deparse(substitute(x)), dQuote(&quot;POSIXct&quot;)), domain = NA)
+#&gt; }
+#&gt; &lt;bytecode: 0x000000001ceb4c50&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>The call (as we can also read in the documentation <code>?as.POSIXct</code>) pass through
+the call to <code>as.POSIXlt()</code>, and in particular, R calls
+<code>as.POSIXct(as.POSIXlt(x, tz, ...), tz, ...)</code> on our character input <code>x</code>
+(<code>the_date</code> for us).</p>
+<pre class="r"><code>as.POSIXlt.character
+#&gt; function (x, tz = &quot;&quot;, format, tryFormats = c(&quot;%Y-%m-%d %H:%M:%OS&quot;, 
+#&gt;     &quot;%Y/%m/%d %H:%M:%OS&quot;, &quot;%Y-%m-%d %H:%M&quot;, &quot;%Y/%m/%d %H:%M&quot;, 
+#&gt;     &quot;%Y-%m-%d&quot;, &quot;%Y/%m/%d&quot;), optional = FALSE, ...) 
+#&gt; {
+#&gt;     x &lt;- unclass(x)
+#&gt;     if (!missing(format)) {
+#&gt;         res &lt;- strptime(x, format, tz = tz)
+#&gt;         if (nzchar(tz)) 
+#&gt;             attr(res, &quot;tzone&quot;) &lt;- tz
+#&gt;         return(res)
+#&gt;     }
+#&gt;     xx &lt;- x[!is.na(x)]
+#&gt;     if (!length(xx)) {
+#&gt;         res &lt;- strptime(x, &quot;%Y/%m/%d&quot;)
+#&gt;         if (nzchar(tz)) 
+#&gt;             attr(res, &quot;tzone&quot;) &lt;- tz
+#&gt;         return(res)
+#&gt;     }
+#&gt;     else for (f in tryFormats) if (all(!is.na(strptime(xx, f, 
+#&gt;         tz = tz)))) {
+#&gt;         res &lt;- strptime(x, f, tz = tz)
+#&gt;         if (nzchar(tz)) 
+#&gt;             attr(res, &quot;tzone&quot;) &lt;- tz
+#&gt;         return(res)
+#&gt;     }
+#&gt;     if (optional) 
+#&gt;         as.POSIXlt.character(rep.int(NA_character_, length(x)), 
+#&gt;             tz = tz)
+#&gt;     else stop(&quot;character string is not in a standard unambiguous format&quot;)
+#&gt; }
+#&gt; &lt;bytecode: 0x000000001ceb0580&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>For us, <code>tz</code> is <code>&quot;Pacific/Auckland&quot;</code>, <code>missing(format)</code> evaluates to <code>TRUE</code>, <code>tryFormats</code> matchs
+“%Y-%m-%d”, <code>optional</code> remain the default <code>FALSE</code>. Moreover, because
+<code>the_date</code> has a basic class <em>character</em> its <code>unclass()</code> doesn’t change it</p>
+<pre class="r"><code>identical(
+  the_date,
+  unclass(the_date)
+)
+#&gt; [1] TRUE</code></pre>
+<p>and <code>nzchar(tz)</code> is <code>TRUE</code> because we passed an explicit timezone.</p>
+<p>Hence, our actual call is <code>res &lt;- strptime(x, f, tz = tz)</code> with a further
+attribute definition as <code>attr(res, &quot;tzone&quot;) &lt;- tz</code> (and a obvius final
+<code>return(res)</code>).</p>
+<p>So, as before, we finish to call <code>strptime()</code> on a character vector, but this
+time we pass the timezone into the call and so the date is parsed as the
+midnight in <strong>that</strong> timezone. After that, R remove any additional timezones
+attached as an attributes bringing only the (first) one passed explicitely.</p>
+<pre class="r"><code>res &lt;- strptime(the_date, &quot;%Y-%m-%d&quot;, tz = &quot;Pacific/Auckland&quot;)
+unclass(res)
+#&gt; $sec
+#&gt; [1] 0
+#&gt; 
+#&gt; $min
+#&gt; [1] 0
+#&gt; 
+#&gt; $hour
+#&gt; [1] 0
+#&gt; 
+#&gt; $mday
+#&gt; [1] 1
+#&gt; 
+#&gt; $mon
+#&gt; [1] 9
+#&gt; 
+#&gt; $year
+#&gt; [1] 118
+#&gt; 
+#&gt; $wday
+#&gt; [1] 1
+#&gt; 
+#&gt; $yday
+#&gt; [1] 273
+#&gt; 
+#&gt; $isdst
+#&gt; [1] 1
+#&gt; 
+#&gt; $zone
+#&gt; [1] &quot;NZDT&quot;
+#&gt; 
+#&gt; $gmtoff
+#&gt; [1] NA
+#&gt; 
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;Pacific/Auckland&quot; &quot;NZST&quot;             &quot;NZDT&quot;
+
+attr(res, &quot;tzone&quot;) &lt;- &quot;Pacific/Auckland&quot;
+unclass(res)
+#&gt; $sec
+#&gt; [1] 0
+#&gt; 
+#&gt; $min
+#&gt; [1] 0
+#&gt; 
+#&gt; $hour
+#&gt; [1] 0
+#&gt; 
+#&gt; $mday
+#&gt; [1] 1
+#&gt; 
+#&gt; $mon
+#&gt; [1] 9
+#&gt; 
+#&gt; $year
+#&gt; [1] 118
+#&gt; 
+#&gt; $wday
+#&gt; [1] 1
+#&gt; 
+#&gt; $yday
+#&gt; [1] 273
+#&gt; 
+#&gt; $isdst
+#&gt; [1] 1
+#&gt; 
+#&gt; $zone
+#&gt; [1] &quot;NZDT&quot;
+#&gt; 
+#&gt; $gmtoff
+#&gt; [1] NA
+#&gt; 
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;Pacific/Auckland&quot;</code></pre>
+<p>Now is the turn to call <code>as.POSIXct.POSIXlt()</code> to this object</p>
+<pre class="r"><code>as.POSIXct.POSIXlt
+#&gt; function (x, tz = &quot;&quot;, ...) 
+#&gt; {
+#&gt;     tzone &lt;- attr(x, &quot;tzone&quot;)
+#&gt;     if (missing(tz) &amp;&amp; !is.null(tzone)) 
+#&gt;         tz &lt;- tzone[1L]
+#&gt;     y &lt;- .Internal(as.POSIXct(x, tz))
+#&gt;     names(y) &lt;- names(x$year)
+#&gt;     .POSIXct(y, tz)
+#&gt; }
+#&gt; &lt;bytecode: 0x000000001d019380&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>for which <code>tz</code> is (<code>!missing(tz)</code> and) set by us as <code>&quot;Pacific/Auckland&quot;</code>.
+Moreover, it is equal to <code>tzone</code> (for which <code>!is.null(tzone)</code>).</p>
+<p>So, the input is first passed to <code>.Internal(as.POSIXct(x, tz))</code> (which we don’t
+know what it does but we know it considers the timezone).<a href="#fn3" class="footnote-ref" id="fnref3"><sup>3</sup></a></p>
+<pre class="r"><code>names(res$year)
+#&gt; NULL</code></pre>
+<p>Finally, the result is passed to <code>.POSIXct(y, tz)</code>, end returned.</p>
+<pre class="r"><code>.POSIXct
+#&gt; function (xx, tz = NULL, cl = c(&quot;POSIXct&quot;, &quot;POSIXt&quot;)) 
+#&gt; {
+#&gt;     class(xx) &lt;- cl
+#&gt;     attr(xx, &quot;tzone&quot;) &lt;- tz
+#&gt;     xx
+#&gt; }
+#&gt; &lt;bytecode: 0x000000001b059780&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>This simply set the class, it set (again) the <code>tzone</code> attribute (for us, in this
+automatic chain of call, in the same exact way as before), and return the
+results.</p>
+<p>To do a last useful observation, we can see that the timezone influenced not
+only the <code>tzone</code> attributes of the final object but also it “real” value, in
+the measure provided in the <code>gmtoff</code>. Moreover, note that the <code>isdst</code> has no
+influence on the value but ony on the representation of the object</p>
+<pre class="r"><code>y_gmt &lt;- as.POSIXct(the_date, tz = &quot;GMT&quot;)
+unclass(y_gmt)
+#&gt; [1] 1538352000
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;GMT&quot;
+as.POSIXlt(y_gmt) %&gt;% unclass
+#&gt; $sec
+#&gt; [1] 0
+#&gt; 
+#&gt; $min
+#&gt; [1] 0
+#&gt; 
+#&gt; $hour
+#&gt; [1] 0
+#&gt; 
+#&gt; $mday
+#&gt; [1] 1
+#&gt; 
+#&gt; $mon
+#&gt; [1] 9
+#&gt; 
+#&gt; $year
+#&gt; [1] 118
+#&gt; 
+#&gt; $wday
+#&gt; [1] 1
+#&gt; 
+#&gt; $yday
+#&gt; [1] 273
+#&gt; 
+#&gt; $isdst
+#&gt; [1] 0
+#&gt; 
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;GMT&quot;
+
+
+y_local &lt;- as.POSIXct(the_date)
+unclass(y_local)
+#&gt; [1] 1538344800
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;&quot;
+as.POSIXlt(y_local) %&gt;% unclass
+#&gt; $sec
+#&gt; [1] 0
+#&gt; 
+#&gt; $min
+#&gt; [1] 0
+#&gt; 
+#&gt; $hour
+#&gt; [1] 0
+#&gt; 
+#&gt; $mday
+#&gt; [1] 1
+#&gt; 
+#&gt; $mon
+#&gt; [1] 9
+#&gt; 
+#&gt; $year
+#&gt; [1] 118
+#&gt; 
+#&gt; $wday
+#&gt; [1] 1
+#&gt; 
+#&gt; $yday
+#&gt; [1] 273
+#&gt; 
+#&gt; $isdst
+#&gt; [1] 1
+#&gt; 
+#&gt; $zone
+#&gt; [1] &quot;CEST&quot;
+#&gt; 
+#&gt; $gmtoff
+#&gt; [1] 7200
+#&gt; 
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;&quot;     &quot;CET&quot;  &quot;CEST&quot;
+
+unclass(y)
+#&gt; [1] 1538305200
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;Pacific/Auckland&quot;
+as.POSIXlt(y) %&gt;% unclass
+#&gt; $sec
+#&gt; [1] 0
+#&gt; 
+#&gt; $min
+#&gt; [1] 0
+#&gt; 
+#&gt; $hour
+#&gt; [1] 0
+#&gt; 
+#&gt; $mday
+#&gt; [1] 1
+#&gt; 
+#&gt; $mon
+#&gt; [1] 9
+#&gt; 
+#&gt; $year
+#&gt; [1] 118
+#&gt; 
+#&gt; $wday
+#&gt; [1] 1
+#&gt; 
+#&gt; $yday
+#&gt; [1] 273
+#&gt; 
+#&gt; $isdst
+#&gt; [1] 1
+#&gt; 
+#&gt; $zone
+#&gt; [1] &quot;NZDT&quot;
+#&gt; 
+#&gt; $gmtoff
+#&gt; [1] 46800
+#&gt; 
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;Pacific/Auckland&quot; &quot;NZST&quot;             &quot;NZDT&quot;</code></pre>
+<p>Clearly if we make the addition manualy, we obtain results which differ in the
+timezones but the number underline the representation is the same (despite
+what was <code>isdst</code>)</p>
+<pre class="r"><code>unclass(y_gmt)
+#&gt; [1] 1538352000
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;GMT&quot;
+unclass(y_local) + as.POSIXlt(y_local)$gmtoff
+#&gt; [1] 1538352000
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;&quot;
+unclass(y) + as.POSIXlt(y)$gmtoff
+#&gt; [1] 1538352000
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;Pacific/Auckland&quot;</code></pre>
+</div>
+<div id="from-as.date-to-as.posixcttz-defined-without-passing-back-from-character-representation" class="section level2">
+<h2>From <code>as.Date()</code> to <code>as.POSIXct(tz = &lt;defined&gt;)</code> (without passing back from character representation)</h2>
+<p>First of all take a look to what would happen for a (correct but unwanted)
+conversion with <code>as.POSIXct()</code></p>
+<pre class="r"><code>as.POSIXct.Date
+#&gt; function (x, ...) 
+#&gt; .POSIXct(unclass(x) * 86400)
+#&gt; &lt;bytecode: 0x0000000020b9d0f0&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>it will simply take the value (in days), multiplies it by the number of seconds
+in a day (which are $60 * 60 * 24 = $ 8.6410^{4}) and recreate the
+<em>POSIXct</em> object by <code>.POSIXct()</code> (without any timezone declaration!). Hence,
+what we will obtain is the datetime representation in seconds, in our <code>Sys.timezone()</code>, correctly converted to the “same original time” which was the
+midnight at <em>GMT</em></p>
+<pre class="r"><code>as.POSIXct(x)
+#&gt; [1] &quot;2018-10-01 02:00:00 CEST&quot;</code></pre>
+<p>Hence, we cannot use this function. We could use directly the <code>.POSIXct()</code> but
+we first have to adjust the number of the day in the correct timezone (which can
+be triky) and explicitelly pass to it the timezone we want (which is simple).</p>
+<p>To consider another strategy we can think to pass through <code>as.POSIXlt()</code></p>
+<pre class="r"><code>as.POSIXlt.Date
+#&gt; function (x, ...) 
+#&gt; .Internal(Date2POSIXlt(x))
+#&gt; &lt;bytecode: 0x000000001aa8fa98&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>but it doesn’t have a timezone definition. We know that our <em>Date</em> object has been always reported in the <em>UTC</em> timezone reference (after a step in which it
+was computed in our timezone). Anyway, we don’t know which timezone is used
+by <code>as.POSIXlt.Date()</code></p>
+<pre class="r"><code>x 
+#&gt; [1] &quot;2018-10-01&quot;</code></pre>
+<pre class="r"><code>as.POSIXlt.Date(x)
+#&gt; [1] &quot;2018-10-01 UTC&quot;
+as.POSIXlt.Date(x) %&gt;% unclass
+#&gt; $sec
+#&gt; [1] 0
+#&gt; 
+#&gt; $min
+#&gt; [1] 0
+#&gt; 
+#&gt; $hour
+#&gt; [1] 0
+#&gt; 
+#&gt; $mday
+#&gt; [1] 1
+#&gt; 
+#&gt; $mon
+#&gt; [1] 9
+#&gt; 
+#&gt; $year
+#&gt; [1] 118
+#&gt; 
+#&gt; $wday
+#&gt; [1] 1
+#&gt; 
+#&gt; $yday
+#&gt; [1] 273
+#&gt; 
+#&gt; $isdst
+#&gt; [1] 0
+#&gt; 
+#&gt; attr(,&quot;tzone&quot;)
+#&gt; [1] &quot;UTC&quot;</code></pre>
+<p>It seams it correctly uses the <em>UTC</em> timezone. Hence we have a <em>POSIXlt</em>
+representation of the midnight of our original date with respect to the <em>UTC</em>
+reference.</p>
+<p>Now, we want a <em>POSIXct</em> representation of it <strong>in</strong> the preferred timezone
+(hence, we don;t want a conversion because we want <strong>the midnight</strong> of that
+timezone for <code>the_date</code>).</p>
+<pre class="r"><code>as.POSIXct.POSIXlt
+#&gt; function (x, tz = &quot;&quot;, ...) 
+#&gt; {
+#&gt;     tzone &lt;- attr(x, &quot;tzone&quot;)
+#&gt;     if (missing(tz) &amp;&amp; !is.null(tzone)) 
+#&gt;         tz &lt;- tzone[1L]
+#&gt;     y &lt;- .Internal(as.POSIXct(x, tz))
+#&gt;     names(y) &lt;- names(x$year)
+#&gt;     .POSIXct(y, tz)
+#&gt; }
+#&gt; &lt;bytecode: 0x000000001d019380&gt;
+#&gt; &lt;environment: namespace:base&gt;</code></pre>
+<p>As we can already seen the only dark step is what happen inside
+<code>.Internal(as.POSIXct(x, tz))</code> which uses (we don’t know how) the information
+about the stored timezone. So, we can try to apply this function a see what
+happen</p>
+<pre class="r"><code>as.POSIXct(as.POSIXlt(x), tz = &quot;Pacific/Auckland&quot;)
+#&gt; [1] &quot;2018-10-01 NZDT&quot;
+y
+#&gt; [1] &quot;2018-10-01 NZDT&quot;
+
+identical(
+  as.POSIXct(as.POSIXlt(x), tz = &quot;Pacific/Auckland&quot;),
+  y
+)
+#&gt; [1] TRUE</code></pre>
+<p>As we know it seams it works, but not for
+<a href="https://twitter.com/echasnovski">@echasnovsky</a>…</p>
+<p>The only place in which the proces can have problem seams to be into
+<code>.Internal(as.POSIXct(x, tz))</code>, which uses the timezone and hence it can
+interact between <em>UTC</em> and a conversion to the local timezone, before to store
+as attribute the target timezone. Hence, try to force a change in it!</p>
+<pre class="r"><code>identical(
+  as.POSIXlt(x) %&gt;% 
+    `attr&lt;-`(&quot;tzone&quot;, &quot;Pacific/Auckland&quot;) %&gt;% 
+    as.POSIXct(tz = &quot;Pacific/Auckland&quot;),
+  y
+)
+#&gt; [1] TRUE</code></pre>
+<p>Wow. It seams to work too, and it could probably be a safer (even if longer)
+solution. Let’s ask for a test to
+<a href="https://twitter.com/echasnovski">@echasnovsky</a></p>
+{{% tweet "1026798082783100933" %}}
+</div>
+<div id="conclusion" class="section level2">
+<h2>Conclusion</h2>
+<p>We are waiting…</p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>I searched the source code on my
+phone, and it was quite difficult to me to find R source code without R, any
+suggestion?!<a href="#fnref1" class="footnote-back">↩</a></p></li>
+<li id="fn2"><p>This also confirms our empirical congecture
+about the R beginning of time made for <code>as.Date()</code><a href="#fnref2" class="footnote-back">↩</a></p></li>
+<li id="fn3"><p>Next it also change
+the <code>names</code> of the created object. Note that both in our specific case and also
+in every case it is called after a <code>as.POSIXlt()</code> call, it will be set to
+<code>NULL</code>.<a href="#fnref3" class="footnote-back">↩</a></p></li>
+</ol>
+</div>
