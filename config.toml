@@ -23,7 +23,7 @@ preserveTaxonomyNames = true
 paginate = 10
 
 # Enable comments by entering your Disqus shortname
-disqusShortname = "corradolanera"
+disqusShortname = "CorradoLanera"
 
 # Enable analytics by entering your Google Analytics tracking ID
 googleAnalytics = ""
@@ -70,7 +70,7 @@ enableGitInfo = false # original is false
   #   Separate multiple entries with a comma, using the form: `[ {name="Org1", url=""}, {name="Org2", url=""} ]`.
   organizations = [
     { name = "University of Padova", url = "https://www.unipd.it/" },
-    { name = "Dep. Cardiac, Thoracic, and Vascular Sciences", url = "https://www.dctv.unipd.it/" },
+    { name = "Dep. Cardiac, Thoracic, Vascular Sciences and Public Health", url = "https://www.dctv.unipd.it/" },
     { name = "Biostatistics, Epidemiology and Public Health Unit", url = "https://www.dctv.unipd.it/dipartimento/strutture/biostatistica" }
   ]
 

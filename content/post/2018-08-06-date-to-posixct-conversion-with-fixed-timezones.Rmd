@@ -146,7 +146,7 @@ zone, as we can read in the *tz* argument of `?timezone` (e.g., for me is
 `r Sys.timezone()`). In particular (as we can also read in `?strptime` at the
 *format* argument explanation`: __The default for the format methods is
 "%Y-%m-%d %H:%M:%S" if any element has a time component which is not midnight,
-and "%Y-%m-%d" otherwis__), it is parse to the midnight.
+and "%Y-%m-%d" otherwise__), it is parse to the midnight.
 
 So, we have understood that `strptime(x, f)` is a representation of the midnight
 of the day passed as input, in "our" timezone. It has the class(es)
@@ -204,7 +204,7 @@ as.Date.POSIXlt(strptime(the_date, "%Y-%m-%d"))
     quantity of seconds you have to add to reach your timezone.
  2. transform it in a number of day in *UTC*
  
-Hence, if we convert ithe first part in seconds, and we add, in our example,
+Hence, if we convert the first part in seconds, and we add, in our example,
 $7200$, and next we divide for the number of seconds in a day ($86400$) we reach
 the same (numerical) result. As the basic operation (clearly in both the versions chained or with a single call).
 
@@ -328,9 +328,9 @@ automatic chain of call, in the same exact way as before), and return the
 results.
 
 To do a last useful observation, we can see that the timezone influenced not
-only the `tzone` attributes of the final object but also it "real" value, in 
+only the `tzone` attributes of the final object but also its "real" value, in 
 the measure provided in the `gmtoff`. Moreover, note that the `isdst` has no
-influence on the value but ony on the representation of the object
+influence on the value but only on the representation of the object
 
 
 ```{r}
@@ -409,7 +409,7 @@ representation of the midnight of our original date with respect to the *UTC*
 reference.
 
 Now, we want a *POSIXct* representation of it __in__ the preferred timezone 
-(hence, we don;t want a conversion because we want __the midnight__ of that
+(hence, we don't want a conversion because we want __the midnight__ of that
 timezone for `the_date`).
 
 ```{r}
@@ -418,7 +418,7 @@ as.POSIXct.POSIXlt
 
 As we can already seen the only dark step is what happen inside 
 `.Internal(as.POSIXct(x, tz))` which uses (we don't know how) the information
-about the stored timezone. So, we can try to apply this function a see what
+about the stored timezone. So, we can try to apply this function and see what
 happen
 
 
